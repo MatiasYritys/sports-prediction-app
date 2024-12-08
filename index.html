@@ -5,232 +5,214 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Interactive Sports Prediction</title>
   <style>
-    body { 
-      font-family: Arial, sans-serif; 
-      text-align: center; 
-      max-width: 800px; 
-      margin: 0 auto; 
-      padding: 20px; 
+    :root {
+      --primary-color: #007bff;
+      --secondary-color: #6c757d;
+      --background-color: #f4f4f9;
+      --correct-color: #28a745;
+      --incorrect-color: #dc3545;
     }
-    #video-container { margin: 20px auto; width: 100%; }
-    #question { margin: 20px 0; font-size: 18px; font-weight: bold; }
-    button { margin: 10px; padding: 10px 20px; font-size: 16px; }
-    #answer-box {
-      width: 80%;
-      max-width: 500px;
-      margin: 20px auto;
-      padding: 10px;
-      border: 2px solid #ddd;
-      border-radius: 8px;
+    body {
+      font-family: 'Arial', sans-serif;
+      text-align: center;
+      background-color: var(--background-color);
+      margin: 0;
+      padding: 20px;
+      line-height: 1.6;
     }
-    #answer-input {
+    #container {
+      max-width: 800px;
+      margin: 0 auto;
+      position: relative;
+    }
+    video {
       width: 100%;
-      padding: 10px;
-      margin-bottom: 10px;
-      border: 1px solid #ccc;
-      border-radius: 4px;
+      max-height: 500px;
+      object-fit: contain;
+      border: 3px solid var(--secondary-color);
+      border-radius: 10px;
     }
-    #submit-prediction {
-      background-color: #4CAF50;
+    #question-overlay {
+      position: absolute;
+      top: 10%;
+      left: 50%;
+      transform: translateX(-50%);
+      background-color: rgba(0, 0, 0, 0.7);
       color: white;
-      border: none;
+      padding: 15px 25px;
+      border-radius: 15px;
+      font-size: 18px;
+      text-shadow: 1px 1px 2px black;
+      max-width: 90%;
+      transition: all 0.3s ease;
+    }
+    #options {
+      display: flex;
+      justify-content: center;
+      gap: 15px;
+      margin-top: 15px;
+      flex-wrap: wrap;
+    }
+    button {
       padding: 10px 20px;
-      border-radius: 4px;
+      font-size: 16px;
       cursor: pointer;
+      border: none;
+      border-radius: 8px;
+      background-color: var(--primary-color);
+      color: white;
+      transition: all 0.3s ease;
+      text-transform: uppercase;
+      font-weight: bold;
     }
-    #prediction-list {
-      text-align: left;
+    button:hover {
+      transform: scale(1.05);
+      background-color: #0056b3;
+    }
+    button.correct {
+      background-color: var(--correct-color);
+    }
+    button.incorrect {
+      background-color: var(--incorrect-color);
+    }
+    #score {
       margin-top: 20px;
-      border-top: 1px solid #eee;
-      padding-top: 20px;
+      font-size: 24px;
+      font-weight: bold;
+      color: var(--primary-color);
     }
-    #error-message {
-      color: red;
-      margin: 10px 0;
-      display: none;
+    #timer {
+      font-size: 18px;
+      color: var(--secondary-color);
+      margin-bottom: 10px;
+    }
+    #feedback {
+      margin-top: 15px;
+      font-size: 16px;
+      font-style: italic;
     }
   </style>
 </head>
 <body>
   <h1>Interactive Sports Prediction Challenge</h1>
-  
-  <div id="video-upload-container">
-    <input type="file" id="video-input" accept="video/*">
-  </div>
-
-  <div id="video-container">
-    <video id="race-video" width="100%" controls style="display:none;">
+  <div id="timer">Time Left: 60 seconds</div>
+  <div id="container">
+    <video id="sports-video" controls>
+      <source src="swimming-race-video.mp4" type="video/mp4">
       Your browser does not support the video tag.
     </video>
+    <div id="question-overlay"></div>
+    <div id="options"></div>
+    <div id="feedback"></div>
   </div>
-
-  <div id="question"></div>
-  <div id="options"></div>
-
-  <div id="answer-box" style="display:none;">
-    <h3>Provide Your Detailed Prediction</h3>
-    <div id="error-message"></div>
-    <input 
-      type="text" 
-      id="answer-input" 
-      placeholder="Explain your prediction in more detail..."
-    >
-    <button id="submit-prediction">Submit Prediction</button>
-  </div>
-
-  <div id="prediction-list">
-    <h3>Recent Predictions</h3>
-    <ul id="predictions"></ul>
-  </div>
+  <div id="score">Score: 0</div>
 
   <script>
-    const videoInput = document.getElementById('video-input');
-    const videoElement = document.getElementById('race-video');
-    const questionDiv = document.getElementById("question");
-    const optionsDiv = document.getElementById("options");
-    const answerBox = document.getElementById("answer-box");
-    const answerInput = document.getElementById("answer-input");
-    const submitPredictionBtn = document.getElementById("submit-prediction");
-    const predictionsList = document.getElementById("predictions");
-    const errorMessage = document.getElementById("error-message");
+    class SportsPredictionGame {
+      constructor(videoElement, questions) {
+        this.video = videoElement;
+        this.questions = questions;
+        this.currentQuestionIndex = 0;
+        this.score = 0;
+        this.timeRemaining = 60;
+        this.timer = null;
 
-    let currentQuestion = null;
+        this.overlay = document.getElementById('question-overlay');
+        this.optionsDiv = document.getElementById('options');
+        this.scoreDiv = document.getElementById('score');
+        this.timerDiv = document.getElementById('timer');
+        this.feedbackDiv = document.getElementById('feedback');
 
-    // Video upload handling
-    videoInput.addEventListener('change', function(event) {
-      const file = event.target.files[0];
-      if (file) {
-        const fileURL = URL.createObjectURL(file);
-        videoElement.src = fileURL;
-        videoElement.style.display = 'block';
-      }
-    });
-
-    // Expanded and more diverse questions
-    const questions = [
-      { time: 2, text: "Will the swimmer in Lane 3 take the lead within the next 10 seconds?", options: ["Yes", "No"] },
-      { time: 4, text: "Will there be a change in the top 3 positions in the next lap?", options: ["Yes", "No"] },
-      { time: 7, text: "Predict the final margin of victory (in seconds)?", options: ["Less than 1 sec", "1-2 secs", "2-3 secs", "More than 3 secs"] },
-      { time: 10, text: "Which athlete seems to have the most consistent technique?", options: ["Left Lane", "Center Lane", "Right Lane"] },
-      { time: 13, text: "Will any athlete false start or be disqualified?", options: ["Yes", "No"] },
-      { time: 16, text: "Predict the overall race strategy of the lead swimmer", options: ["Aggressive Start", "Steady Pace", "Saving Energy", "Tactical Positioning"] },
-      { time: 20, text: "How will weather conditions impact the race performance?", options: ["Major Impact", "Moderate Impact", "Minimal Impact", "No Impact"] }
-    ];
-
-    let currentQuestionIndex = 0;
-
-    // Display question at the right time
-    videoElement.addEventListener("timeupdate", () => {
-      if (currentQuestionIndex < questions.length && videoElement.currentTime >= questions[currentQuestionIndex].time) {
-        displayQuestion(questions[currentQuestionIndex]);
-        currentQuestionIndex++;
-      }
-    });
-
-    // Function to display a question
-    function displayQuestion(question) {
-      currentQuestion = question;
-      questionDiv.textContent = question.text;
-      optionsDiv.innerHTML = "";
-      question.options.forEach(option => {
-        const button = document.createElement("button");
-        button.textContent = option;
-        button.onclick = () => selectOption(option);
-        optionsDiv.appendChild(button);
-      });
-    }
-
-    // Function to handle option selection
-    function selectOption(option) {
-      answerBox.style.display = 'block';
-      errorMessage.style.display = 'none';
-      answerInput.value = `Selected Option: ${option}. Additional thoughts: `;
-      answerInput.focus();
-    }
-
-    // Submit prediction
-    submitPredictionBtn.addEventListener('click', async () => {
-      const detailedAnswer = answerInput.value.trim();
-      
-      // Enhanced validation
-      if (!currentQuestion) {
-        showError('Please wait for a question to be displayed.');
-        return;
+        this.setupEventListeners();
+        this.startTimer();
       }
 
-      if (!detailedAnswer || detailedAnswer.length < 10) {
-        showError('Please provide a more detailed prediction (minimum 10 characters).');
-        return;
-      }
-
-      try {
-        const response = await fetch('/submit-prediction', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            question: currentQuestion.text,
-            answer: detailedAnswer,
-            timestamp: new Date().toISOString()
-          })
+      setupEventListeners() {
+        this.video.addEventListener('timeupdate', () => {
+          const currentTime = Math.floor(this.video.currentTime);
+          if (
+            this.currentQuestionIndex < this.questions.length &&
+            currentTime >= this.questions[this.currentQuestionIndex].time
+          ) {
+            this.displayQuestion(this.questions[this.currentQuestionIndex]);
+            this.currentQuestionIndex++;
+          }
         });
+      }
+
+      displayQuestion(question) {
+        this.overlay.style.display = 'block';
+        this.overlay.textContent = question.text;
+        this.optionsDiv.innerHTML = '';
+
+        const answers = question.correctAnswer === 'Yes' || question.correctAnswer === 'No'
+          ? ['Yes', 'No']
+          : ['Lane 1', 'Lane 2', 'Lane 3', 'Lane 4', 'Lane 5'];
+
+        answers.forEach(answer => {
+          const button = document.createElement('button');
+          button.textContent = answer;
+          button.onclick = () => this.handleAnswer(question, answer);
+          this.optionsDiv.appendChild(button);
+        });
+      }
+
+      handleAnswer(question, userAnswer) {
+        const isCorrect = userAnswer === question.correctAnswer;
         
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.message || 'Submission failed');
+        this.feedbackDiv.textContent = isCorrect 
+          ? 'Great prediction!' 
+          : `Incorrect. The right answer was: ${question.correctAnswer}`;
+        
+        const buttons = this.optionsDiv.querySelectorAll('button');
+        buttons.forEach(btn => {
+          btn.disabled = true;
+          btn.classList.add(
+            btn.textContent === question.correctAnswer ? 'correct' : 'incorrect'
+          );
+        });
+
+        if (isCorrect) {
+          this.score += 10;
+          this.scoreDiv.textContent = `Score: ${this.score}`;
         }
 
-        const result = await response.json();
-        
-        // Clear inputs and hide answer box
-        answerInput.value = '';
-        answerBox.style.display = 'none';
-        
-        // Fetch and display predictions
-        await fetchPredictions();
-
-        // Show success message
-        alert(`Prediction submitted successfully!`);
-      } catch (error) {
-        console.error('Error submitting prediction:', error);
-        showError(error.message || 'Failed to submit prediction');
+        setTimeout(() => {
+          this.overlay.style.display = 'none';
+          this.optionsDiv.innerHTML = '';
+          this.feedbackDiv.textContent = '';
+        }, 2000);
       }
-    });
 
-    // Show error message
-    function showError(message) {
-      errorMessage.textContent = message;
-      errorMessage.style.display = 'block';
-    }
+      startTimer() {
+        this.timer = setInterval(() => {
+          this.timeRemaining--;
+          this.timerDiv.textContent = `Time Left: ${this.timeRemaining} seconds`;
 
-    // Fetch predictions
-    async function fetchPredictions() {
-      try {
-        const response = await fetch('/predictions');
-        const predictions = await response.json();
-        
-        // Clear existing predictions
-        predictionsList.innerHTML = '';
-        
-        // Display predictions
-        predictions.forEach(prediction => {
-          const li = document.createElement('li');
-          li.innerHTML = `
-            <strong>Question:</strong> ${prediction.question}<br>
-            <strong>Prediction:</strong> ${prediction.answer}<br>
-            <small>Submitted: ${new Date(prediction.timestamp).toLocaleString()}</small>
-          `;
-          predictionsList.appendChild(li);
-        });
-      } catch (error) {
-        console.error('Error fetching predictions:', error);
-        showError('Unable to load predictions');
+          if (this.timeRemaining <= 0) {
+            this.endGame();
+          }
+        }, 1000);
+      }
+
+      endGame() {
+        clearInterval(this.timer);
+        alert(`Game Over! Your final score is: ${this.score}`);
+        this.video.pause();
       }
     }
 
-    // Fetch predictions on page load
-    fetchPredictions();
+    const questions = [
+      { time: 8, text: "Will the swimmer in Lane 1 maintain the lead?", correctAnswer: "Yes" },
+      { time: 16, text: "Will there be a change in the top 3 positions?", correctAnswer: "No" },
+      { time: 24, text: "Will Lane 4 finish the lap within the next 10 seconds?", correctAnswer: "Yes" },
+      { time: 32, text: "Will Lane 2 overtake Lane 3 in this segment?", correctAnswer: "No" },
+      { time: 40, text: "Which lane will touch the wall first at the next turn?", correctAnswer: "Lane 3" },
+      { time: 48, text: "Will Lane 5 fall behind the others in the next 10 seconds?", correctAnswer: "Yes" }
+    ];
+
+    const video = document.getElementById('sports-video');
+    const game = new SportsPredictionGame(video, questions);
   </script>
 </body>
 </html>
