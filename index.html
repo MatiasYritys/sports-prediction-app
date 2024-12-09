@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Interactive Sports Prediction</title>
+  <style>
+    body { 
+      font-family: Arial, sans-serif; 
+      text-align: center; 
+      max-width: 800px; 
+      margin: 0 auto; 
+      padding: 20px; 
+    }
+    #video-container { margin: 20px auto; width: 100%; }
+    #question { margin: 20px 0; font-size: 18px; font-weight: bold; }
+    button { margin: 10px; padding: 10px 20px; font-size: 16px; }
+    #answer-box {
+      width: 80%;
+      max-width: 500px;
+      margin: 20px auto;
+      padding: 10px;
+      border: 2px solid #ddd;
+      border-radius: 8px;
+    }
+    #answer-input {
+      width: 100%;
+      padding: 10px;
+      margin-bottom: 10px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    #submit-prediction {
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    #prediction-list {
+      text-align: left;
+      margin-top: 20px;
+      border-top: 1px solid #eee;
+      padding-top: 20px;
+    }
+    #error-message {
+      color: red;
+      margin: 10px 0;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <h1>Interactive Sports Prediction Challenge</h1>
+  
+  <div id="video-upload-container">
+    <input type="file" id="video-input" accept="video/*">
+  </div>
+
+  <div id="video-container">
+    <video id="race-video" width="100%" controls style="display:none;">
+      Your browser does not support the video tag.
+    </video>
+  </div>
+
+  <div id="question"></div>
+  <div id="options"></div>
+
+  <div id="answer-box" style="display:none;">
+    <h3>Provide Your Detailed Prediction</h3>
+    <div id="error-message"></div>
+    <input 
+      type="text" 
+      id="answer-input" 
+      placeholder="Explain your prediction in more detail..."
+    >
+    <button id="submit-prediction">Submit Prediction</button>
+  </div>
+
+  <div id="prediction-list">
+    <h3>Recent Predictions</h3>
+    <ul id="predictions"></ul>
+  </div>
+
+  <script>
+    const videoInput = document.getElementById('video-input');
+    const videoElement = document.getElementById('race-video');
+    const questionDiv = document.getElementById("question");
+    const optionsDiv = document.getElementById("options");
+    const answerBox = document.getElementById("answer-box");
+    const answerInput = document.getElementById("answer-input");
+    const submitPredictionBtn = document.getElementById("submit-prediction");
+    const predictionsList = document.getElementById("predictions");
+    const errorMessage = document.getElementById("error-message");
+
+    let currentQuestion = null;
+
+    // Video upload handling
+    videoInput.addEventListener('change', function(event) {
+      const file = event.target.files[0];
+      if (file) {
+        const fileURL = URL.createObjectURL(file);
+        videoElement.src = fileURL;
+        videoElement.style.display = 'block';
+      }
+    });
+
+    // Expanded and more diverse questions
+    const questions = [
+      { time: 2, text: "Will the swimmer in Lane 3 take the lead within the next 10 seconds?", options: ["Yes", "No"] },
+      { time: 4, text: "Will there be a change in the top 3 positions in the next lap?", options: ["Yes", "No"] },
+      { time: 7, text: "Predict the final margin of victory (in seconds)?", options: ["Less than 1 sec", "1-2 secs", "2-3 secs", "More than 3 secs"] },
+      { time: 10, text: "Which athlete seems to have the most consistent technique?", options: ["Left Lane", "Center Lane", "Right Lane"] },
+      { time: 13, text: "Will any athlete false start or be disqualified?", options: ["Yes", "No"] },
+      { time: 16, text: "Predict the overall race strategy of the lead swimmer", options: ["Aggressive Start", "Steady Pace", "Saving Energy", "Tactical Positioning"] },
+      { time: 20, text: "How will weather conditions impact the race performance?", options: ["Major Impact", "Moderate Impact", "Minimal Impact", "No Impact"] }
+    ];
+
+    let currentQuestionIndex = 0;
+
+    // Display question at the right time
+    videoElement.addEventListener("timeupdate", () => {
+      if (currentQuestionIndex < questions.length && videoElement.currentTime >= questions[currentQuestionIndex].time) {
+        displayQuestion(questions[currentQuestionIndex]);
+        currentQuestionIndex++;
+      }
+    });
+
+    // Function to display a question
+    function displayQuestion(question) {
+      currentQuestion = question;
+      questionDiv.textContent = question.text;
+      optionsDiv.innerHTML = "";
+      question.options.forEach(option => {
+        const button = document.createElement("button");
+        button.textContent = option;
+        button.onclick = () => selectOption(option);
+        optionsDiv.appendChild(button);
+      });
+    }
+
+    // Function to handle option selection
+    function selectOption(option) {
+      answerBox.style.display = 'block';
+      errorMessage.style.display = 'none';
+      answerInput.value = `Selected Option: ${option}. Additional thoughts: `;
+      answerInput.focus();
+    }
+
+    // Submit prediction
+    submitPredictionBtn.addEventListener('click', async () => {
+      const detailedAnswer = answerInput.value.trim();
+      
+      // Enhanced validation
+      if (!currentQuestion) {
+        showError('Please wait for a question to be displayed.');
+        return;
+      }
+
+      if (!detailedAnswer || detailedAnswer.length < 10) {
+        showError('Please provide a more detailed prediction (minimum 10 characters).');
+        return;
+      }
+
+      try {
+        const response = await fetch('/submit-prediction', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            question: currentQuestion.text,
+            answer: detailedAnswer,
+            timestamp: new Date().toISOString()
+          })
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || 'Submission failed');
+        }
+
+        const result = await response.json();
+        
+        // Clear inputs and hide answer box
+        answerInput.value = '';
+        answerBox.style.display = 'none';
+        
+        // Fetch and display predictions
+        await fetchPredictions();
+
+        // Show success message
+        alert(`Prediction submitted successfully!`);
+      } catch (error) {
+        console.error('Error submitting prediction:', error);
+        showError(error.message || 'Failed to submit prediction');
+      }
+    });
+
+    // Show error message
+    function showError(message) {
+      errorMessage.textContent = message;
+      errorMessage.style.display = 'block';
+    }
+
+    // Fetch predictions
+    async function fetchPredictions() {
+      try {
+        const response = await fetch('/predictions');
+        const predictions = await response.json();
+        
+        // Clear existing predictions
+        predictionsList.innerHTML = '';
+        
+        // Display predictions
+        predictions.forEach(prediction => {
+          const li = document.createElement('li');
+          li.innerHTML = `
+            <strong>Question:</strong> ${prediction.question}<br>
+            <strong>Prediction:</strong> ${prediction.answer}<br>
+            <small>Submitted: ${new Date(prediction.timestamp).toLocaleString()}</small>
+          `;
+          predictionsList.appendChild(li);
+        });
+      } catch (error) {
+        console.error('Error fetching predictions:', error);
+        showError('Unable to load predictions');
+      }
+    }
+
+    // Fetch predictions on page load
+    fetchPredictions();
+  </script>
+</body>
+</html>
